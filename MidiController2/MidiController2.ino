@@ -1,6 +1,6 @@
 /********
 
-    VERSION 0.9
+    VERSION 0.9.1
 
     MIDI info from here:
     http://hinton-instruments.co.uk/reference/midi/protocol/index.htm
@@ -8,6 +8,16 @@
     
     This is basically an extended, optimized version of MidiController1 version 0.6 that features multiple modes.
 
+    CHANGES:
+      - 0.9.1
+        - So... I seem to almost be reaching the memory limit here.
+        - Removed pseudo-splashscreen for memory reasons
+        - Made the notes[] variable global, also for memory reasons
+        - Added channel info display on mode 1 (this will probably get added to midicontroller1)
+        
+      - 0.9.0
+        - Added the second mode with 5 general knobs
+        - Added logic for the RGB LED
 
     TODO:
       - Debounce b3 ?
@@ -31,6 +41,7 @@ Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 
 int mode = 2;
 
+String notes[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 // The buttons
 boolean status = false;   // Note transmission status
@@ -50,21 +61,8 @@ void setup()  {
   
   display.begin(SSD1306_SWITCHCAPVCC);
   display.clearDisplay();
-  
-  // Startup text
-  display.setTextSize(2);
-  display.setTextColor(BLACK, WHITE);
-  display.println("          ");
-  display.println("  Anti-   \n  Matter  ");
-  display.println("          ");
-  display.display();
-  delay(1000);
-  display.clearDisplay();
-  
   display.setTextSize(1);
-  display.setTextColor(WHITE, BLACK);
-
-
+  
   /* RGB LED mapping:
     8 - R
     7 - G
@@ -134,14 +132,11 @@ void loop() {
     int p0 = (status ? currentNote : map(analogRead(A0), 15, 940, 127, 0));
     p0 = (p0 < 0 ? 0 : p0);
     p0 = (p0 > 127 ? 127 : p0);
-    String notes[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 
     // BUTTONS
 
     if(b0 && !status){
-      
-      
       // Initial Press
       Serial.write(0x90 + p4);
       Serial.write(p0);
@@ -166,26 +161,19 @@ void loop() {
       Serial.write(0x40);
       Serial.write(63);
 
-      
       status = false;
       transmit = 0;
     }
-    else if(!b0){
-      status = false;
-    }
 
-
-    bool b2 = (digitalRead(3) == HIGH ? true : false);
-
-    if(b2){
+    if(b1){
       Serial.write(0xB0 + p4);
       Serial.write(0x7B);
       Serial.write(0x65);
     }
 
-
-    // pitch BEND
+    // KNOBS
     
+    // pitch bend
     if(p2 != prevPitch){
       Serial.write(0xE0 + p4);
       Serial.write(0x00);
@@ -194,8 +182,7 @@ void loop() {
     }  
 
 
-    // General KNOB
-
+    // General
     Serial.write(0xB0);
     Serial.write(0x50);
     Serial.write(p3);
@@ -212,12 +199,16 @@ void loop() {
       for(int i = 0; i < ((transmit/10)%4); i++)
         display.print(".");
     }
-    display.println("");  
+    display.println("");
+    
+    // Display channel info
+    display.print("Channel:     ");
+    display.println(p4+1);
 
     // Display pitch bend info
 
-    display.print("\nPitch Bend:  ");
-    display.print(p2 > 64 ? "+" : "");
+    display.print("Pitch Bend: ");
+    display.print(p2 > 64 ? "+" : (p2 == 64 ? " " : ""));
     display.println(p2-64);
     
     
@@ -263,6 +254,7 @@ void loop() {
     digitalWrite(6, LOW);
     digitalWrite(7, HIGH);
 
+    // POTENTIOMETERS
 
     int p0 = map(analogRead(A0), 15, 940, 127, 0);
     p0 = (p0 < 0 ? 0 : p0);
@@ -284,6 +276,7 @@ void loop() {
     p4 = (p4 < 0 ? 0 : p4);
     p4 = (p4 > 127 ? 127 : p4);
 
+    // BUTTONS
 
     if(b0 && !status){
 
@@ -320,12 +313,37 @@ void loop() {
       status = false;
     }
     
-    
     if(b1)
       currentNote--;
       
     if(b2)
       currentNote++;
+      
+      
+    // SERIAL OUTPUT
+    
+    Serial.write(0xB0);
+    Serial.write(0x50);
+    Serial.write(p0);
+    
+    Serial.write(0xB0);
+    Serial.write(0x51);
+    Serial.write(p1);
+    
+    Serial.write(0xB0);
+    Serial.write(0x52);
+    Serial.write(p2);
+    
+    Serial.write(0xB0);
+    Serial.write(0x53);
+    Serial.write(p3);
+    
+    Serial.write(0xB0);
+    Serial.write(0x54);
+    Serial.write(p4);
+      
+      
+    // DISPLAY
 
 
     // MIDI State
@@ -339,7 +357,7 @@ void loop() {
     display.println("");
 
     // Display the current note
-    String notes[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
     display.print("[");
     for(int i = 0; i < map(currentNote, 0, 127, 0, numBars)-1; i++)
       display.print("-");
